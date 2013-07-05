@@ -1,82 +1,16 @@
-[bits 16]
-FUNCOFFSET equ 0x8000		;
-FUNCSEG equ 0x0800
-
-main:
-	cli			;
-	mov ax, 0x9000		;
-	mov ss, ax		;
-	mov bp, 0x0000		;
-	mov sp, bp		;
-	sti			;
-	mov ax, 0x7c0		;
-	mov ds, ax		;
-
-	;; load 3 sectors to 0x0000:FUNCOFFSET
-	mov ax, 0		;
-	mov es, ax		;
-	mov byte[BOOT_DRIVE],dl ;
-	mov bx, FUNCOFFSET	;
-	mov dh, 4		;
-	call loadDisk		;
-	mov si, LOAD_MSG-main	;
-	call printString_1	;
-jump:
-	jmp FUNCSEG:0x0000	;
-	mov ah,0x0e		;
-	mov al,'X'		;
-	int 0x10		;
-	jmp jump		;
-
-loadDisk:
-	push dx			;
-	mov ah, 0x02		;
-	mov al, dh		;
-	mov ch, 0x00		;
-	mov dh, 0x00		;
-	mov cl, 0x02		;
-	int 0x13		;
-	jc .disk_error		;
-	pop dx			;
-	cmp dh, al		;
-	jne .disk_error		;
-	ret			;
-	.disk_error:
-	mov si, DISK_ERROR_MSG-main	;
-	call printString_1	;
-	jmp $			;
-
-printString_1:
-	pusha			;
-	mov ah, 0x0e		;
-	.loop:
-	mov al, [ds:si]		;
-	cmp al, 0		;
-	je .return		;
-	int 0x10		;
-	inc si			;
-	jmp .loop		;
-	.return:
-	popa			;
-	ret			;
-
-BOOT_DRIVE db 0			;
-LOAD_MSG db 'Code loading.',0	;
-DISK_ERROR_MSG db 'Disk error.',0 ;
-times 510-($-$$) db 0		;
-dw 0xaa55			;
-
 ;;; Here starts code sectors
+[bits 16]
+[org 0x8000]
 function_start:
-	mov ax, cs		;
+	mov ax, 0		;
 	mov ds, ax		;
-	mov si, CODE_MSG-function_start;
+	mov si, GAME_MSG;
 	call printString	;
+
 	mov ah, 0x86		;
 	mov cx, 0x000f		;
 	mov dx, 0x4240		;
 	int 0x15		; wait for 1s
-
 	call field		;
 	jmp $			;
 field:
@@ -90,8 +24,8 @@ field:
 	mov ax, 0x0000		;
 	mov ds, ax		;
 	mov bx, 0x1c*4		;
-	mov word[bx], clockRoutine-function_start;
-	mov ax, cs		   ;
+	mov word[bx], clockRoutine;
+	mov ax, 0		   ;
 	mov word[bx+2], ax	   ;
 	pop ds			   ;
 	sti			   ;
@@ -99,11 +33,11 @@ field:
 	;; show a random apple
 	call showRandApple	;
 	;;
-	mov ax, word[snakebox-function_start]	;
+	mov ax, word[snakebox]	;
 	mov bx, 0		;
 	mov word[es:bx], ax 	;
 	.loop:
-	cmp byte[status-function_start], 0	       ;
+	cmp byte[status], 0	       ;
 	je .reset		;
 	mov ah, 0x00		; read a character
 	int 0x16		;
@@ -117,9 +51,9 @@ field:
 	je .store		;
 	jmp .loop		;
 	.store:
-	mov bx, [snakeLen-function_start]      ;
+	mov bx, [snakeLen]      ;
 	dec bx;
-	mov byte[bx+snakeDir-function_start], al   ;
+	mov byte[bx+snakeDir], al   ;
 	jmp .loop		;
 	.reset:
 	mov ah, 0x00		;
@@ -133,88 +67,91 @@ field:
 clockRoutine:
 	mov ax, cs		;
 	mov ds, ax		;
-	mov al, byte[delay-function_start]	;
-	cmp byte[timer-function_start], al	;
+	mov al, byte[delay]	;
+	cmp byte[timer], al	;
 	je .next		;
-	inc byte[timer-function_start]		;
+	inc byte[timer]		;
 	iret			;
 	.next:
-	cmp byte[status-function_start], 1    ;
+	cmp byte[status], 1    ;
 	jne .return			      ;
-	mov ax, word[snakeLen-function_start] ;
+	mov ax, word[snakeLen] ;
 	dec ax                                ;
-	mov si, snakePos-function_start	      ;
+	mov si, snakePos	      ;
 	mov cx, 4			      ;
 	mul cx				      ;
 	add si, ax			      ;
 	mov ax, word[si]          ;
-	mov byte[newBoxFlag-function_start], 0;
-	cmp word[applePos-function_start], ax; reach an apple
+	mov byte[newBoxFlag], 0;
+	cmp word[applePos], ax; reach an apple
 	jne .move;
-	cmp word[snakeLen-function_start], 90;
+	cmp word[snakeLen], 90;
 	jne .o;
 	call gamecomplete;
 	iret
 	.o:
-	inc word[appleNum-function_start]	;
+	inc word[appleNum]	;
 	call showRandApple	;
-    mov byte[newBoxFlag-function_start], 1;
-	inc word[snakeLen-function_start]     ;
+    mov byte[newBoxFlag], 1;
+	inc word[snakeLen]     ;
 	;; add a snake box
 	;; set position
-	mov ax, word[snakeLen-function_start] ;
+	mov ax, word[snakeLen] ;
 	dec ax                                ;
-	mov si, snakePos-function_start	      ;
+	mov si, snakePos	      ;
 	mov cx, 4			      ;
 	mul cx				      ;
 	add si, ax			      ;
 	mov bx, word[si-4]		      ;
 	mov word[si], bx		      ;
 	;; set direction
-	mov ax, word[snakeLen-function_start] ;
+	mov ax, word[snakeLen] ;
 	dec ax;
-	mov si, snakeDir-function_start	      ;
+	mov si, snakeDir	      ;
 	mov cx, 1			      ;
 	mul cx				      ;
 	add si, ax			      ;
 	mov bx, word[si-1]		      ;
 	mov word[si], bx		      ;
 	;; change speed
-	mov ax, word[appleNum-function_start]	;
+	mov ax, word[appleNum]	;
 	mov dx, 0		;
 	mov cx, 5		;
 	div cx			;
 	cmp dx, 0		;
 	jne .move		;
-	dec byte[delay-function_start]		;
-	cmp byte[delay-function_start], 0	;
+	inc word[level];
+	dec byte[delay]		;
+	cmp byte[delay], 0	;
 	jne .move		;
-	mov byte[delay-function_start], 1	;
+	mov byte[delay], 1	;
+
 	.move:
-	mov byte[timer-function_start], 0	;
+    call printInfo;
+	mov byte[timer], 0	;
 
 	call moveSnake		;
 
-    mov al, byte[newBoxFlag-function_start];
+    mov al, byte[newBoxFlag];
     cmp al, 0;
     jne .return;
     ;; update snake boxes directions
     mov bx, 0;
 	.loop: ;copy snakeDir to snakeDirTmp
-	cmp bx, [snakeLen-function_start];
+	cmp bx, [snakeLen];
 	je .update;
-	mov dl, byte[bx+snakeDir-function_start];
-	mov byte[bx+snakeDirTmp-function_start], dl;
+	mov dl, byte[bx+snakeDir];
+	mov byte[bx+snakeDirTmp], dl;
 	inc bx;
 	jmp .loop;
 
     .update:
     mov bx, 1;
 	.updateloop: ; update directions of snake
-	cmp bx, [snakeLen-function_start];
+	cmp bx, [snakeLen];
 	je .return;
-	mov dl, byte[bx+snakeDirTmp-function_start];
-	mov byte[bx-1+snakeDir-function_start], dl;
+	mov dl, byte[bx+snakeDirTmp];
+	mov byte[bx-1+snakeDir], dl;
 	inc bx;
 	jmp .updateloop;
 
@@ -223,13 +160,13 @@ clockRoutine:
 
 
 moveSnake:
-    mov al, byte[newBoxFlag-function_start];
+    mov al, byte[newBoxFlag];
     cmp al, 0;
     je .nonewbox;
 
-    mov cx, word[snakeLen-function_start] ;
+    mov cx, word[snakeLen] ;
 	dec cx;
-	mov si, snakeDir-function_start		 ;
+	mov si, snakeDir		 ;
 	mov ax, 1				 ;
 	mul cx					 ;
 	add si, ax				 ;
@@ -257,12 +194,12 @@ moveSnake:
     ret;
 
     .nonewbox:
-	mov cx, word[snakeLen-function_start] ;
+	mov cx, word[snakeLen] ;
 	dec cx;
 	.loop:
 	cmp cx, 0
 	jl .return			      ;
-	mov si, snakeDir-function_start		 ;
+	mov si, snakeDir		 ;
 	mov ax, 1				 ;
 	mul cx					 ;
 	add si, ax				 ;
@@ -308,7 +245,7 @@ cls:
 	.loop:
 	cmp bx, 4000		;
 	jz .return		;
-	mov ax, word[backgroundbox-function_start];
+	mov ax, word[backgroundbox];
 	mov word[es:bx], ax	;
 	add bx, 2		;
 	jmp .loop		;
@@ -342,12 +279,12 @@ showRandApple:
 	mul cx			;
 	mov bx, ax		;
 	mov ax, word[es:bx]		      ;
-	cmp ax, word[snakebox-function_start] ;
+	cmp ax, word[snakebox] ;
 	je .loop		;
 
-	mov ax, word[applebox-function_start];
+	mov ax, word[applebox];
 	mov word[es:bx], ax;
-	mov word[applePos-function_start], bx	; store current apple position
+	mov word[applePos], bx	; store current apple position
 
 	popa			;
 	ret			;
@@ -363,12 +300,12 @@ rand:
 	push dx			;
 	mov ah, 0x00		; read time
 	int 0x1a		;
-	mov word[seed-function_start], dx	;
+	mov word[seed], dx	;
 	mov ax, 31821		;
-	mul word[seed-function_start]	;
+	mul word[seed]	;
 	add ax, 13849		;
 
-	mov word[seed-function_start], ax	;
+	mov word[seed], ax	;
 	mov cx, ax				;
 	pop dx			;
 	pop bx			;
@@ -376,46 +313,48 @@ rand:
 	ret			;
 
 gameover:
-	cmp byte[status-function_start], 1  ;
+	cmp byte[status], 1  ;
 	jne .return			    ;
-	mov si, GAMEOVER_MSG-function_start;
+	mov si, GAMEOVER_MSG;
 	call printString		   ;
-	mov byte[status-function_start], 0 ;
+	mov byte[status], 0 ;
 	.return:
 	ret			;
 gamecomplete:
-	cmp byte[status-function_start], 1  ;
+	cmp byte[status], 1  ;
 	jne .return			    ;
-	mov si, SNAKEFULL_MSG-function_start;
+	mov si, SNAKEFULL_MSG;
 	call printString		   ;
-	mov byte[status-function_start], 0 ;
+	mov byte[status], 0 ;
 	.return:
 	ret			;
 reset:
 	call cls				;
-	;; set cursor position
+	;; set cursor position: (10,20)
 	mov ah, 0x02				;
 	mov bh, 0				;
 	mov dh, 10				;
 	mov dl, 20				;
 	int 0x10				;
 	;; reset variables
-	mov word[seed-function_start], 0 ;
-	mov word[applePos-function_start], 0	     ;
-	mov word[appleNum-function_start], 0	     ;
-	mov byte[timer-function_start], 0	     ;
-	mov byte[delay-function_start], 2	     ;
-	mov byte[snakeDir-function_start], 'd'     ;
-	mov word[snakePos-function_start], 0	     ;
-	mov byte[status-function_start], 1   ;
-	mov word[snakeLen-function_start], 1 ;
+	mov byte[level], 0;
+	mov word[seed], 0 ;
+	mov word[applePos], 0	     ;
+	mov word[appleNum], 0	     ;
+	mov byte[timer], 0	     ;
+	mov byte[delay], 2	     ;
+	mov byte[snakeDir], 'd'     ;
+	mov word[snakePos], 0	     ;
+	mov byte[status], 1   ;
+	mov word[snakeLen], 1 ;
+
 	ret			     ;
 moveup:
 	;; move box located in [es:bx] upward
 	;; set bx as current pos
 	;; cx is counter of snake blocks
 	pusha			;
-	mov si, snakePos-function_start		 ;
+	mov si, snakePos		 ;
 	mov ax, 4				 ;
 	mul cx					 ;
 	add si, ax				 ;
@@ -423,13 +362,13 @@ moveup:
 
 	mov ax, 0xb800		;
 	mov es, ax		;
-	mov ax, word[snakebox-function_start]	;
+	mov ax, word[snakebox]	;
 	mov word[es:bx],ax	;
 
-    mov al, byte[newBoxFlag-function_start];
+    mov al, byte[newBoxFlag];
     cmp al, 1;
     je .norecover;
-	mov ax, word[backgroundbox-function_start]	;
+	mov ax, word[backgroundbox]	;
 	mov word[es:bx], ax	;
 	.norecover:
 	cmp bx, 160		;
@@ -441,12 +380,12 @@ moveup:
 	sub bx, 160		;
 	;; test if collide
 	mov ax, word[es:bx];
-	cmp ax, word[snakebox-function_start];
+	cmp ax, word[snakebox];
 	jne .set;
 	call gameover;
 	jmp .over;
 	.set:
-	mov ax, word[snakebox-function_start]	;
+	mov ax, word[snakebox]	;
 	mov word[es:bx],ax	;
 
 	mov word[si], bx	;
@@ -458,7 +397,7 @@ movedown:
 	;; move box located in [es:bx] downward
 	;; cx is counter of snake blocks
 	pusha			;
-	mov si, snakePos-function_start		 ;
+	mov si, snakePos		 ;
 	mov ax, 4				 ;
 	mul cx					 ;
 	add si, ax				 ;
@@ -466,13 +405,13 @@ movedown:
 
 	mov ax, 0xb800		;
 	mov es, ax		;
-	mov ax, word[snakebox-function_start]	;
+	mov ax, word[snakebox]	;
 	mov word[es:bx],ax	;
 
-	mov al, byte[newBoxFlag-function_start];
+	mov al, byte[newBoxFlag];
     cmp al, 1;
     je .norecover;
-	mov ax, word[backgroundbox-function_start]	;
+	mov ax, word[backgroundbox]	;
 	mov word[es:bx], ax	;
 	.norecover:
 	add bx, 160		;
@@ -484,12 +423,12 @@ movedown:
 	.next:
 	;; test if collide
 	mov ax, word[es:bx];
-	cmp ax, word[snakebox-function_start];
+	cmp ax, word[snakebox];
 	jne .set;
 	call gameover;
 	jmp .over;
 	.set:
-	mov ax, word[snakebox-function_start]	;
+	mov ax, word[snakebox]	;
 	mov word[es:bx],ax	;
 
 	mov word[si], bx	;
@@ -501,7 +440,7 @@ moveleft:
 	;; move box located in [es:bx] leftward
 	;; cx is counter of snake blocks
 	pusha			;
-	mov si, snakePos-function_start		 ;
+	mov si, snakePos		 ;
 	mov ax, 4				 ;
 	mul cx					 ;
 	add si, ax				 ;
@@ -509,13 +448,13 @@ moveleft:
 
 	mov ax, 0xb800		;
 	mov es, ax		;
-	mov ax, word[snakebox-function_start]	;
+	mov ax, word[snakebox]	;
 	mov word[es:bx],ax	;
 
-	mov al, byte[newBoxFlag-function_start];
+	mov al, byte[newBoxFlag];
     cmp al, 1;
     je .norecover;
-	mov ax, word[backgroundbox-function_start]	;
+	mov ax, word[backgroundbox]	;
 	mov word[es:bx], ax	;
 	.norecover:
 	mov dx, 0		;
@@ -531,12 +470,12 @@ moveleft:
 	sub bx, 2		;
 	;; test if collide
 	mov ax, word[es:bx];
-	cmp ax, word[snakebox-function_start];
+	cmp ax, word[snakebox];
 	jne .set;
 	call gameover;
 	jmp .over;
 	.set:
-	mov ax, word[snakebox-function_start]	;
+	mov ax, word[snakebox]	;
 	mov word[es:bx],ax	;
 
 	mov word[si], bx	;
@@ -548,7 +487,7 @@ moveright:
 	;; move box located in [es:bx] rightward
 	;; cx is counter of snake blocks
 	pusha			;
-	mov si, snakePos-function_start		 ;
+	mov si, snakePos		 ;
 	mov ax, 4				 ;
 	mul cx					 ;
 	add si, ax				 ;
@@ -556,13 +495,13 @@ moveright:
 
 	mov ax, 0xb800		;
 	mov es, ax		;
-	mov ax, word[snakebox-function_start]	;
+	mov ax, word[snakebox]	;
 	mov word[es:bx],ax	;
 
-	mov al, byte[newBoxFlag-function_start];
+	mov al, byte[newBoxFlag];
     cmp al, 1;
     je .norecover;
-	mov ax, word[backgroundbox-function_start]	;
+	mov ax, word[backgroundbox]	;
 	mov word[es:bx], ax	;
     .norecover:
 	mov dx, 0		;
@@ -574,12 +513,12 @@ moveright:
 	add bx, 2		;
 	;; test if collide
 	mov ax, word[es:bx];
-	cmp ax, word[snakebox-function_start];
+	cmp ax, word[snakebox];
 	jne .set;
 	call gameover;
 	jmp .over;
 	.set:
-	mov ax, word[snakebox-function_start]	;
+	mov ax, word[snakebox]	;
 	mov word[es:bx],ax	;
 	mov ax, bx		;
 
@@ -591,23 +530,45 @@ moveright:
 	popa			;
 	ret			;
 
-printString:
-	pusha			;
-	mov ah, 0x0e		;
-	.loop:
-	mov al, [ds:si]		;
-	cmp al, 0		;
-	je .return		;
-	int 0x10		;
-	inc si			;
-	jmp .loop		;
-	.return:
-	popa			;
-	ret			;
+printInfo:
+    pusha;
+    ;; set cursor position: (1,70)
+	mov ah, 0x02				;
+	mov bh, 0				;
+	mov dh, 1				;
+	mov dl, 70				;
+	int 0x10				;
+	mov si, SCORE_STR;
+	call printString;
+    mov cx, word[appleNum];
+	call printInt;
+	;; set cursor position: (3,70)
+	mov ah, 0x02				;
+	mov bh, 0				;
+	mov dh, 3				;
+	mov dl, 70				;
+	int 0x10				;
+
+	mov si, LEVEL_STR;
+	call printString;
+	mov cx, word[level];
+	call printInt;
+    ;; set cursor position: (10,20)
+	mov ah, 0x02				;
+	mov bh, 0				;
+	mov dh, 10				;
+	mov dl, 20				;
+	int 0x10				;
+
+	popa;
+	ret;
+
+%include "io.asm"
 
 seed dw 0			;
 applePos dw 0			;
-appleNum dw 0			;
+appleNum dw 1			;
+level dw 1;
 
 applebox dw 0xcc20	;
 snakebox dw 0x1120		;
@@ -626,7 +587,9 @@ snakeDirTmp db 'd'			;d:right, w:up, a:left, s:down e: end
 newBoxFlag db 0
 snakeLen dw 1			;
 
+SCORE_STR db "Score: ",0;
+LEVEL_STR db "Level: ",0;
+GAME_MSG db 'Game starts...',0	;
 GAMEOVER_MSG db "Game Over!(Double press 'r' to try again)",0	;
-CODE_MSG db 'Now in Code sector.',0	;
 SNAKEFULL_MSG db "Snake is full!(Double press 'r')", 0;
 times 2048-($-function_start) db 0		;

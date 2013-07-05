@@ -1,0 +1,71 @@
+[bits 16]
+FUNCOFFSET equ 0x8000		;
+FUNCSEG equ 0x0800
+	
+main:
+	cli			;
+	mov ax, 0x9000		;
+	mov ss, ax		;
+	mov bp, 0x0000		;
+	mov sp, bp		;
+	sti			;
+	mov ax, 0x7c0		;
+	mov ds, ax		;
+
+	;; load 1 sectors to 0x0000:CODEOFFSET
+	mov ax, 0		;
+	mov es, ax		;
+	mov byte[BOOT_DRIVE],dl ;
+	mov bx, FUNCOFFSET	;
+	mov dh, 1		;
+	call loadDisk		;
+	mov ax, FUNCSEG		;
+	mov ds, ax		;
+	jmp bx			;
+	jmp $
+
+loadDisk:
+	push dx			;
+	mov ah, 0x02		;
+	mov al, dh		;
+	mov ch, 0x00		;
+	mov dh, 0x00		;
+	mov cl, 0x02		;
+	int 0x13		;
+	jc .disk_error		;
+	pop dx			;
+	cmp dh, al		;
+	jne .disk_error		;
+	ret			;
+	.disk_error:
+	mov si, DISK_ERROR_MSG-main	;
+	call printString	;
+	jmp $			;
+	
+printString:
+	pusha			;
+	mov ah, 0x0e		;
+	.loop:
+	mov al, [ds:si]		;
+	cmp al, 0		;
+	je .return		;
+	int 0x10		;
+	inc si			;
+	jmp .loop		;
+	.return:
+	popa			;
+	ret			;
+
+BOOT_DRIVE db 0			;
+LOAD_MSG db 'Code loaded.',0	;
+DISK_ERROR_MSG db 'Disk error.',0 ;
+times 510-($-$$) db 0		;
+dw 0xaa55			;
+
+;;;
+function_start:
+	mov ah, 0x0e		    ;
+	mov al, 'X'		    ;
+	int 0x10		    ;
+times 511-($-function_start) db 'a'		;
+db 0						;
